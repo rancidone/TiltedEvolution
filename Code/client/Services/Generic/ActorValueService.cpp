@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <TiltedOnlinePCH.h>
 
 #include <Services/ActorValueService.h>
@@ -262,6 +263,8 @@ void ActorValueService::RunDeathStateUpdates() noexcept
             spdlog::info("Sending death state {} for local actor {:X}, server id: {:X}", isDead, pActor->formID, localComponent.Id);
 
             RequestDeathStateChange requestChange;
+            requestChange.Trace = CoopDiagnostics::NextTrace();
+            CoopDiagnostics::Log(requestChange.Trace, "death.observed", "local={:X} entity={:X} epoch={} dead={}", formIdComponent.Id, localComponent.Id, localComponent.OwnershipEpoch, isDead);
             requestChange.Id = localComponent.Id;
             requestChange.OwnershipEpoch = localComponent.OwnershipEpoch;
             requestChange.IsDead = isDead;
@@ -381,6 +384,7 @@ void ActorValueService::OnActorMaxValueChanges(const NotifyActorMaxValueChanges&
 
 void ActorValueService::OnDeathStateChange(const NotifyDeathStateChange& acMessage) const noexcept
 {
+    CoopDiagnostics::Log(acMessage.Trace, "death.received", "entity={:X} epoch={} dead={}", acMessage.Id, acMessage.OwnershipEpoch, acMessage.IsDead);
     auto view = m_world.view<FormIdComponent, RemoteComponent>();
 
     const auto it = std::find_if(std::begin(view), std::end(view), [&acMessage, view](entt::entity entity)
@@ -395,6 +399,7 @@ void ActorValueService::OnDeathStateChange(const NotifyDeathStateChange& acMessa
         spdlog::info(
             "Dropped death state {} for server id {:X} at epoch {}, entity found: {}, has form id: {}, waiting for 3D: {}", acMessage.IsDead, acMessage.Id, acMessage.OwnershipEpoch,
             cEntity.has_value(), cEntity && m_world.all_of<FormIdComponent>(*cEntity), cEntity && m_world.all_of<WaitingFor3D>(*cEntity));
+        CoopDiagnostics::Log(acMessage.Trace, "death.skipped", "reason=entity_or_epoch_missing");
         return;
     }
 
@@ -402,16 +407,28 @@ void ActorValueService::OnDeathStateChange(const NotifyDeathStateChange& acMessa
     Actor* pActor = Cast<Actor>(TESForm::GetById(formIdComponent.Id));
 
     if (!pActor)
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "death.skipped", "reason=actor_missing");
         return;
+    }
 
     ActorExtension* pExtension = pActor->GetExtension();
     // Players should never be killed
     if (pExtension->IsPlayer())
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "death.skipped", "reason=player_protected");
         return;
+    }
 
-    if (pActor->IsDead() != acMessage.IsDead)
+    const bool wasDead = pActor->IsDead();
+    CoopDiagnostics::Log(acMessage.Trace, "death.local_state", "local={:X} dead={} requested={}", formIdComponent.Id, wasDead, acMessage.IsDead);
+    if (wasDead != acMessage.IsDead)
     {
         spdlog::info("Applying death state {} to remote actor {:X}, server id: {:X}", acMessage.IsDead, pActor->formID, acMessage.Id);
+        CoopDiagnostics::Log(acMessage.Trace, "death.apply_attempt", "operation={}", acMessage.IsDead ? "kill" : "respawn");
         acMessage.IsDead ? pActor->Kill() : pActor->Respawn();
+        CoopDiagnostics::Log(acMessage.Trace, "death.apply_returned", "postcondition=unverified");
     }
+    else
+        CoopDiagnostics::Log(acMessage.Trace, "death.skipped", "reason=already_matches");
 }

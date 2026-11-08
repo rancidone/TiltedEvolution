@@ -1,5 +1,7 @@
 #pragma once
 
+#include <CoopDiagnostics.h>
+
 #include <Structs/Inventory.h>
 #include <ExtraData/ExtraDataList.h>
 
@@ -10,6 +12,7 @@
  */
 struct InventoryChangeEvent
 {
+    DiagnosticTrace Trace = CoopDiagnostics::NextTrace();
     InventoryChangeEvent(const uint32_t aFormId, Inventory::Entry arItem)
         : FormId(aFormId)
         , Item(std::move(arItem))

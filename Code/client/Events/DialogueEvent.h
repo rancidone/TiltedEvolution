@@ -1,10 +1,13 @@
 #pragma once
 
+#include <CoopDiagnostics.h>
+
 /**
  * @brief Dispatched whenever an actor talks
  */
 struct DialogueEvent
 {
+    DiagnosticTrace Trace = CoopDiagnostics::NextTrace();
     DialogueEvent(uint32_t aActorID, String aVoiceFile, uint32_t aSceneID, uint32_t aScenePhase)
         : ActorID(aActorID)
         , VoiceFile(aVoiceFile)

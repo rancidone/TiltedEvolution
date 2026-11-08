@@ -1,7 +1,10 @@
 #pragma once
 
+#include <CoopDiagnostics.h>
+
 struct SubtitleEvent
 {
+    DiagnosticTrace Trace = CoopDiagnostics::NextTrace();
     SubtitleEvent(uint32_t aSpeakerID, String aText)
         : SpeakerID(aSpeakerID)
         , Text(aText)

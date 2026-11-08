@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include "InventoryService.h"
 
 #include <Components.h>
@@ -28,13 +29,17 @@ InventoryService::InventoryService(World& aWorld, entt::dispatcher& aDispatcher)
 void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChanges>& acMessage) noexcept
 {
     auto& message = acMessage.Packet;
+    CoopDiagnostics::Log(message.Trace, "inventory.server_received", "sender={:X} entity={:X} epoch={} item={:X}:{:X} count={} drop={} update={}", acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, message.Item.BaseId.ModId, message.Item.BaseId.BaseId, message.Item.Count, message.Drop, message.UpdateClients);
 
     auto view = m_world.view<InventoryComponent>();
 
     const auto it = view.find(static_cast<entt::entity>(message.ServerId));
 
     if (it == view.end())
+    {
+        CoopDiagnostics::Log(message.Trace, "inventory.server_skipped", "reason=missing_inventory");
         return;
+    }
 
     bool isRemoteNpcInteraction = false;
 
@@ -48,6 +53,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
             spdlog::debug(
                 "Rejected inventory change from player {:X} for actor {:X} at stale epoch {}; current owner is {:X} at epoch {}",
                 acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+            CoopDiagnostics::Log(message.Trace, "inventory.server_skipped", "reason=stale_epoch");
             return;
         }
 
@@ -66,6 +72,7 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
                 const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
                 spdlog::debug(
                     "Rejected inventory change from player {:X} for actor {:X} because it is owned by player {:X}", acMessage.pPlayer->GetId(), message.ServerId, ownerId);
+                CoopDiagnostics::Log(message.Trace, "inventory.server_skipped", "reason=not_owner_or_remote_interaction");
                 return;
             }
         }
@@ -75,22 +82,29 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
         spdlog::warn(
             "Rejected inventory change from player {:X} because object {:X} unexpectedly carried ownership epoch {}",
             acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+        CoopDiagnostics::Log(message.Trace, "inventory.server_skipped", "reason=object_with_epoch");
         return;
     }
 
     auto& inventoryComponent = view.get<InventoryComponent>(*it);
     inventoryComponent.Content.AddOrRemoveEntry(message.Item);
+    CoopDiagnostics::Log(message.Trace, "inventory.server_applied", "remote_interaction={}", isRemoteNpcInteraction);
 
     if (!message.UpdateClients && !isRemoteNpcInteraction)
+    {
+        CoopDiagnostics::Log(message.Trace, "inventory.server_skipped", "reason=clients_update_disabled");
         return;
+    }
 
     NotifyInventoryChanges notify;
+    notify.Trace = acMessage.Packet.Trace;
     notify.ServerId = message.ServerId;
     notify.OwnershipEpoch = message.OwnershipEpoch;
     notify.Item = message.Item;
 
     notify.Drop = bEnableItemDrops && !isRemoteNpcInteraction ? message.Drop : false;
 
+    CoopDiagnostics::Log(message.Trace, "inventory.server_relay", "drop={}", notify.Drop);
     const entt::entity cOrigin = static_cast<entt::entity>(message.ServerId);
     if (!GameServer::Get()->SendToPlayersInRange(notify, cOrigin, acMessage.GetSender()))
         spdlog::error("{}: SendToPlayersInRange failed", __FUNCTION__);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Message.h"
+#include <Structs/DiagnosticTrace.h>
 #include <Structs/Inventory.h>
 
 struct RequestInventoryChanges final : ClientMessage
@@ -14,12 +15,14 @@ struct RequestInventoryChanges final : ClientMessage
 
     virtual ~RequestInventoryChanges() = default;
 
+    DiagnosticTrace Trace{};
+
     void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept override;
     void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept override;
 
     bool operator==(const RequestInventoryChanges& acRhs) const noexcept
     {
-        return GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && OwnershipEpoch == acRhs.OwnershipEpoch && Item == acRhs.Item && Drop == acRhs.Drop && UpdateClients == acRhs.UpdateClients;
+        return Trace == acRhs.Trace && GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && OwnershipEpoch == acRhs.OwnershipEpoch && Item == acRhs.Item && Drop == acRhs.Drop && UpdateClients == acRhs.UpdateClients;
     }
 
     uint32_t ServerId{};

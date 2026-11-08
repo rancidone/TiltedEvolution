@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Components.h>
 #include <Messages/RequestActorValueChanges.h>
 #include <Messages/RequestActorMaxValueChanges.h>
@@ -102,19 +103,31 @@ void ActorValueService::OnHealthChangeBroadcast(const PacketEvent<RequestHealthC
 void ActorValueService::OnDeathStateChange(const PacketEvent<RequestDeathStateChange>& acMessage) const noexcept
 {
     auto& message = acMessage.Packet;
+    CoopDiagnostics::Log(message.Trace, "death.server_received", "sender={:X} entity={:X} epoch={} dead={}", acMessage.pPlayer->GetId(), message.Id, message.OwnershipEpoch, message.IsDead);
 
     auto characterView = m_world.view<CharacterComponent, OwnerComponent>();
 
     const auto it = characterView.find(static_cast<entt::entity>(message.Id));
 
-    if (it == characterView.end() || !characterView.get<OwnerComponent>(*it).IsCurrentOwner(acMessage.pPlayer, message.OwnershipEpoch))
+    if (it == characterView.end())
+    {
+        CoopDiagnostics::Log(message.Trace, "death.server_rejected", "reason=entity_missing");
         return;
+    }
+    const auto& owner = characterView.get<OwnerComponent>(*it);
+    if (!owner.IsCurrentOwner(acMessage.pPlayer, message.OwnershipEpoch))
+    {
+        CoopDiagnostics::Log(message.Trace, "death.server_rejected", "reason=ownership current_owner={:X} current_epoch={}", owner.GetOwner() ? owner.GetOwner()->GetId() : 0, owner.OwnershipEpoch);
+        return;
+    }
 
     auto& characterComponent = characterView.get<CharacterComponent>(*it);
     characterComponent.SetDead(message.IsDead);
+    CoopDiagnostics::Log(message.Trace, "death.server_applied", "dead={}", message.IsDead);
     spdlog::debug("Updating death state {:x}:{}", message.Id, message.IsDead);
 
     NotifyDeathStateChange notify;
+    notify.Trace = acMessage.Packet.Trace;
     notify.OwnershipEpoch = message.OwnershipEpoch;
     notify.Id = message.Id;
     notify.IsDead = message.IsDead;

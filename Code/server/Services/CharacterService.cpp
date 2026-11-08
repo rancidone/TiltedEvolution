@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Services/CharacterService.h>
 #include <Components.h>
 #include <GameServer.h>
@@ -589,9 +590,11 @@ void CharacterService::OnSyncExperienceRequest(const PacketEvent<SyncExperienceR
 
 void CharacterService::OnDialogueRequest(const PacketEvent<DialogueRequest>& acMessage) const noexcept
 {
+    CoopDiagnostics::Log(acMessage.Packet.Trace, "dialogue.server_received", "sender={:X} entity={:X} scene={:X}:{:X} phase={}", acMessage.pPlayer->GetId(), acMessage.Packet.ServerId, acMessage.Packet.SceneId.ModId, acMessage.Packet.SceneId.BaseId, acMessage.Packet.ScenePhase);
     auto& message = acMessage.Packet;
 
     NotifyDialogue notify{};
+    notify.Trace = acMessage.Packet.Trace;
     notify.ServerId = message.ServerId;
     notify.SoundFilename = message.SoundFilename;
     notify.SceneId = message.SceneId;
@@ -604,9 +607,11 @@ void CharacterService::OnDialogueRequest(const PacketEvent<DialogueRequest>& acM
 
 void CharacterService::OnSubtitleRequest(const PacketEvent<SubtitleRequest>& acMessage) const noexcept
 {
+    CoopDiagnostics::Log(acMessage.Packet.Trace, "subtitle.server_received", "sender={:X} entity={:X} scene={:X}:{:X} phase={}", acMessage.pPlayer->GetId(), acMessage.Packet.ServerId, acMessage.Packet.SceneId.ModId, acMessage.Packet.SceneId.BaseId, acMessage.Packet.ScenePhase);
     auto& message = acMessage.Packet;
 
     NotifySubtitle notify{};
+    notify.Trace = acMessage.Packet.Trace;
     notify.ServerId = message.ServerId;
     notify.Text = message.Text;
     notify.SceneId = message.SceneId;

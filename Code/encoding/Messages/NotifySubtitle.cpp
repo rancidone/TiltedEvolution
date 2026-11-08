@@ -2,6 +2,7 @@
 
 void NotifySubtitle::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
+    Trace.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, ServerId);
     Serialization::WriteString(aWriter, Text);
     Serialization::WriteVarInt(aWriter, TopicFormId);
@@ -12,6 +13,7 @@ void NotifySubtitle::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const 
 void NotifySubtitle::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
     ServerMessage::DeserializeRaw(aReader);
+    Trace.Deserialize(aReader);
 
     ServerId = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;
     Text = Serialization::ReadString(aReader);

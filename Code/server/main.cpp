@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 
 #include "GameServer.h"
 
@@ -93,6 +94,9 @@ GS_EXPORT void SetDefaultLogger(std::shared_ptr<spdlog::logger> aLogger)
 {
     // #ifdef _WIN32
     spdlog::set_default_logger(std::move(aLogger));
+    CoopDiagnostics::Log({}, "startup", "role=server build={}", BUILD_COMMIT);
+    if (!CoopDiagnostics::GetConfiguration().Enabled && std::getenv("STR_DIAGNOSTICS"))
+        spdlog::warn("CoopDiag disabled: launcher must supply valid process and session IDs and STR_DIAGNOSTICS=1");
     // #endif
 }
 

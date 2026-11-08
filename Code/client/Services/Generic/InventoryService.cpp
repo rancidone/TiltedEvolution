@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Services/InventoryService.h>
 
 #include <Messages/RequestObjectInventoryChanges.h>
@@ -46,15 +47,22 @@ void InventoryService::OnUpdate(const UpdateEvent& acUpdateEvent) noexcept
 
 void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEvent) noexcept
 {
+    CoopDiagnostics::Log(acEvent.Trace, "inventory.queued", "local={:X} entity={:X} epoch={} item={:X}:{:X} count={} drop={} update={}", acEvent.FormId, acEvent.ServerId, acEvent.OwnershipEpoch, acEvent.Item.BaseId.ModId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count, acEvent.Drop, acEvent.UpdateClients);
     if (!m_transport.IsConnected())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "client.skipped", "reason=not_connected");
         return;
+    }
 
     auto view = m_world.view<FormIdComponent>();
 
     const auto iter = std::find_if(std::begin(view), std::end(view), [view, formId = acEvent.FormId](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
 
     if (iter == std::end(view))
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "client.skipped", "reason=missing_entity");
         return;
+    }
 
     uint32_t serverId = 0;
     if (acEvent.OwnershipEpoch != 0)
@@ -67,6 +75,7 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
         if (!ownershipMatches)
         {
             spdlog::debug("Discarded an inventory change for actor {:X} because ownership changed after it was queued (epoch {})", acEvent.ServerId, acEvent.OwnershipEpoch);
+            CoopDiagnostics::Log(acEvent.Trace, "client.skipped", "reason=ownership_changed");
             return;
         }
 
@@ -75,19 +84,24 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     else
     {
         if (Cast<Actor>(TESForm::GetById(acEvent.FormId)))
+        {
+            CoopDiagnostics::Log(acEvent.Trace, "client.skipped", "reason=actor_without_epoch");
             return;
+        }
 
         const std::optional<uint32_t> serverIdRes = Utils::GetServerId(*iter);
         if (!serverIdRes)
         {
             spdlog::warn(
                 "Discarded inventory change for form {:X} because it has no server entity (item {:X}, count {})", acEvent.FormId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count);
+            CoopDiagnostics::Log(acEvent.Trace, "client.skipped", "reason=missing_server_id");
             return;
         }
         serverId = *serverIdRes;
     }
 
     RequestInventoryChanges request;
+    request.Trace = acEvent.Trace;
     request.ServerId = serverId;
     request.OwnershipEpoch = acEvent.OwnershipEpoch;
     request.Item = acEvent.Item;
@@ -147,6 +161,7 @@ void InventoryService::OnEquipmentChangeEvent(const EquipmentChangeEvent& acEven
 
 void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& acMessage) noexcept
 {
+    CoopDiagnostics::Log(acMessage.Trace, "inventory.received", "entity={:X} epoch={} item={:X}:{:X} count={} drop={}", acMessage.ServerId, acMessage.OwnershipEpoch, acMessage.Item.BaseId.ModId, acMessage.Item.BaseId.BaseId, acMessage.Item.Count, acMessage.Drop);
     if (acMessage.OwnershipEpoch != 0)
     {
         Actor* pActor = nullptr;
@@ -176,9 +191,11 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
         if (!pActor)
         {
             spdlog::debug("Discarded an inventory update for actor {:X} because epoch {} is no longer current", acMessage.ServerId, acMessage.OwnershipEpoch);
+            CoopDiagnostics::Log(acMessage.Trace, "inventory.skipped", "reason=actor_or_epoch_missing");
             return;
         }
 
+        CoopDiagnostics::Log(acMessage.Trace, "inventory.apply_attempt", "local={:X} operation={}", pActor->formID, acMessage.Drop ? "drop_or_pickup" : "add_or_remove");
         ScopedInventoryOverride _;
 
         if (acMessage.Drop)
@@ -186,15 +203,21 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
         else
             pActor->AddOrRemoveItem(acMessage.Item);
 
+        CoopDiagnostics::Log(acMessage.Trace, "inventory.apply_returned", "postcondition=unverified");
         return;
     }
 
     TESObjectREFR* pObject = Utils::GetByServerId<TESObjectREFR>(acMessage.ServerId);
     if (!pObject)
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "inventory.skipped", "reason=object_missing");
         return;
+    }
 
     ScopedInventoryOverride _;
+    CoopDiagnostics::Log(acMessage.Trace, "inventory.apply_attempt", "local={:X} operation=add_or_remove", pObject->formID);
     pObject->AddOrRemoveItem(acMessage.Item);
+    CoopDiagnostics::Log(acMessage.Trace, "inventory.apply_returned", "postcondition=unverified");
 }
 
 void InventoryService::OnNotifyEquipmentChanges(const NotifyEquipmentChanges& acMessage) noexcept

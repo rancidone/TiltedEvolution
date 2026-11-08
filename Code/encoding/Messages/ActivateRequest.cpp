@@ -2,6 +2,7 @@
 
 void ActivateRequest::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
+    Trace.Serialize(aWriter);
     Id.Serialize(aWriter);
     CellId.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, ActivatorId);
@@ -11,6 +12,7 @@ void ActivateRequest::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const
 void ActivateRequest::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
     ClientMessage::DeserializeRaw(aReader);
+    Trace.Deserialize(aReader);
 
     Id.Deserialize(aReader);
     CellId.Deserialize(aReader);

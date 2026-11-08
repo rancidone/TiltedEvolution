@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Message.h"
+#include <Structs/DiagnosticTrace.h>
 
 struct NotifyDeathStateChange final : ServerMessage
 {
@@ -11,10 +12,12 @@ struct NotifyDeathStateChange final : ServerMessage
     {
     }
 
+    DiagnosticTrace Trace{};
+
     void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept override;
     void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept override;
 
-    bool operator==(const NotifyDeathStateChange& acRhs) const noexcept { return Id == acRhs.Id && OwnershipEpoch == acRhs.OwnershipEpoch && IsDead == acRhs.IsDead && GetOpcode() == acRhs.GetOpcode(); }
+    bool operator==(const NotifyDeathStateChange& acRhs) const noexcept { return Trace == acRhs.Trace && Id == acRhs.Id && OwnershipEpoch == acRhs.OwnershipEpoch && IsDead == acRhs.IsDead && GetOpcode() == acRhs.GetOpcode(); }
 
     uint32_t Id;
     uint32_t OwnershipEpoch{};

@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Services/ObjectService.h>
 
 #include <World.h>
@@ -250,25 +251,34 @@ entt::entity ObjectService::CreateObjectEntity(const uint32_t acFormId, const ui
 
 void ObjectService::OnActivate(const ActivateEvent& acEvent) noexcept
 {
+    CoopDiagnostics::Log(acEvent.Trace, "activation.queued", "original_local={:X} original_activator_local={:X}", acEvent.DiagnosticObjectId, acEvent.DiagnosticActivatorId);
     if (acEvent.ActivateFlag)
     {
         acEvent.pObject->Activate(acEvent.pActivator, acEvent.Unk1, acEvent.pObjectToGet, acEvent.Count, acEvent.DefaultProcessing);
     }
 
     if (!m_transport.IsConnected())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=not_connected");
         return;
+    }
 
     if (Lock* pLock = acEvent.pObject->GetLock())
     {
         if (pLock->flags & 0xFF)
+        {
+            CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=locked");
             return;
+        }
     }
 
     ActivateRequest request;
+    request.Trace = acEvent.Trace;
 
     if (!m_world.GetModSystem().GetServerModId(acEvent.pObject->formID, request.Id))
     {
         spdlog::error("Server form id not found for object form id {:X}", acEvent.pObject->formID);
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=object_mod_mapping_missing");
         return;
     }
 
@@ -276,12 +286,14 @@ void ObjectService::OnActivate(const ActivateEvent& acEvent) noexcept
     if (!pCell)
     {
         spdlog::error("Activated object has no parent cell: {:X}", acEvent.pObject->formID);
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=parent_cell_missing");
         return;
     }
 
     if (!m_world.GetModSystem().GetServerModId(pCell->formID, request.CellId))
     {
         spdlog::error("Server cell id not found for cell form id {:X}", pCell->formID);
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=cell_mod_mapping_missing");
         return;
     }
 
@@ -291,25 +303,32 @@ void ObjectService::OnActivate(const ActivateEvent& acEvent) noexcept
     if (pEntity == std::end(view))
     {
         // spdlog::error("Activator entity not found for form id {:X}", acEvent.pActivator->formID);
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=activator_entity_missing");
         return;
     }
 
     std::optional<uint32_t> serverIdRes = Utils::GetServerId(*pEntity);
     if (!serverIdRes.has_value())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "activation.skipped", "reason=activator_server_id_missing");
         return;
+    }
 
     request.ActivatorId = serverIdRes.value();
     request.PreActivationOpenState = acEvent.PreActivationOpenState;
 
+    CoopDiagnostics::Log(request.Trace, "activation.send", "object={:X}:{:X} activator={:X} cell={:X}:{:X}", request.Id.ModId, request.Id.BaseId, request.ActivatorId, request.CellId.ModId, request.CellId.BaseId);
     m_transport.Send(request);
 }
 
 void ObjectService::OnActivateNotify(const NotifyActivate& acMessage) noexcept
 {
+    CoopDiagnostics::Log(acMessage.Trace, "activation.received", "object={:X}:{:X} activator={:X}", acMessage.Id.ModId, acMessage.Id.BaseId, acMessage.ActivatorId);
     Actor* pActor = Utils::GetByServerId<Actor>(acMessage.ActivatorId);
     if (!pActor)
     {
         spdlog::error("{}: could not find actor server id {:X}", __FUNCTION__, acMessage.ActivatorId);
+        CoopDiagnostics::Log(acMessage.Trace, "activation.skipped", "reason=activator_missing");
         return;
     }
 
@@ -318,6 +337,7 @@ void ObjectService::OnActivateNotify(const NotifyActivate& acMessage) noexcept
     if (!pObject)
     {
         spdlog::error("Failed to retrieve object to activate.");
+        CoopDiagnostics::Log(acMessage.Trace, "activation.skipped", "reason=object_missing");
         return;
     }
 
@@ -330,13 +350,16 @@ void ObjectService::OnActivateNotify(const NotifyActivate& acMessage) noexcept
         {
             // The doors are unsynced at this point. If we'll Activate the one on our side
             // it'll just continue to be unsynced (open remotely, closed locally and vice versa)
+            CoopDiagnostics::Log(acMessage.Trace, "activation.skipped", "reason=door_state_differs");
             return;
         }
     }
 
     // unsure if these flags are the best, but these are passed with the papyrus Activate fn
     // might be an idea to have the client send the flags through NotifyActivate
+    CoopDiagnostics::Log(acMessage.Trace, "activation.apply_attempt", "local={:X} activator_local={:X}", cObjectId, pActor->formID);
     pObject->Activate(pActor, 0, nullptr, 1, 0);
+    CoopDiagnostics::Log(acMessage.Trace, "activation.apply_returned", "postcondition=unverified");
 }
 
 void ObjectService::OnLockChange(const LockChangeEvent& acEvent) noexcept

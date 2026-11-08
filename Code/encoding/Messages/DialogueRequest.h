@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Message.h"
+#include <Structs/DiagnosticTrace.h>
 #include <Structs/GameId.h>
 
 using TiltedPhoques::String;
@@ -14,10 +15,12 @@ struct DialogueRequest final : ClientMessage
     {
     }
 
+    DiagnosticTrace Trace{};
+
     void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept override;
     void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept override;
 
-    bool operator==(const DialogueRequest& acRhs) const noexcept { return GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && SoundFilename == acRhs.SoundFilename && SceneId == acRhs.SceneId && ScenePhase == acRhs.ScenePhase; }
+    bool operator==(const DialogueRequest& acRhs) const noexcept { return Trace == acRhs.Trace && GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && SoundFilename == acRhs.SoundFilename && SceneId == acRhs.SceneId && ScenePhase == acRhs.ScenePhase; }
 
     uint32_t ServerId{};
     TiltedPhoques::String SoundFilename{};

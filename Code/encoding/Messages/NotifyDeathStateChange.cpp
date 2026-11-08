@@ -2,6 +2,7 @@
 
 void NotifyDeathStateChange::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
+    Trace.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, Id);
     Serialization::WriteVarInt(aWriter, OwnershipEpoch);
     Serialization::WriteBool(aWriter, IsDead);
@@ -10,6 +11,7 @@ void NotifyDeathStateChange::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter
 void NotifyDeathStateChange::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
     ServerMessage::DeserializeRaw(aReader);
+    Trace.Deserialize(aReader);
 
     Id = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;
     OwnershipEpoch = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;

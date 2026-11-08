@@ -3,6 +3,7 @@
 
 void NotifyInventoryChanges::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
+    Trace.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, ServerId);
     Serialization::WriteVarInt(aWriter, OwnershipEpoch);
     Item.Serialize(aWriter);
@@ -12,6 +13,7 @@ void NotifyInventoryChanges::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter
 void NotifyInventoryChanges::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
     ServerMessage::DeserializeRaw(aReader);
+    Trace.Deserialize(aReader);
 
     ServerId = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;
     OwnershipEpoch = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;

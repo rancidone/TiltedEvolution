@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include "Forms/TESObjectCELL.h"
 #include "Forms/TESWorldSpace.h"
 #include "Services/PapyrusService.h"
@@ -1152,37 +1153,51 @@ static bool IsLineVoicedByLocalScene(Actor* apActor, const GameId& acSceneId, ui
 
 void CharacterService::OnDialogueEvent(const DialogueEvent& acEvent) noexcept
 {
+    CoopDiagnostics::Log(acEvent.Trace, "dialogue.queued", "local={:X} scene_local={:X} phase={}", acEvent.ActorID, acEvent.SceneID, acEvent.ScenePhase);
     if (!m_transport.IsConnected())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "dialogue.skipped", "reason=not_connected");
         return;
+    }
 
     auto view = m_world.view<FormIdComponent>(entt::exclude<ObjectComponent>);
     auto entityIt = std::find_if(view.begin(), view.end(), [view, formId = acEvent.ActorID](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
 
     if (entityIt == view.end())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "dialogue.skipped", "reason=entity_missing");
         return;
+    }
 
     auto serverIdRes = Utils::GetServerId(*entityIt);
     if (!serverIdRes)
     {
         spdlog::error("{}: server id not found for form id {:X}", __FUNCTION__, acEvent.ActorID);
+        CoopDiagnostics::Log(acEvent.Trace, "dialogue.skipped", "reason=server_id_missing");
         return;
     }
 
     DialogueRequest request{};
+    request.Trace = acEvent.Trace;
     request.ServerId = serverIdRes.value();
     request.SoundFilename = acEvent.VoiceFile;
     if (acEvent.SceneID && m_world.GetModSystem().GetServerModId(acEvent.SceneID, request.SceneId))
         request.ScenePhase = acEvent.ScenePhase;
 
+    CoopDiagnostics::Log(request.Trace, "dialogue.send", "entity={:X} scene={:X}:{:X} phase={}", request.ServerId, request.SceneId.ModId, request.SceneId.BaseId, request.ScenePhase);
     m_transport.Send(request);
 }
 
 void CharacterService::OnNotifyDialogue(const NotifyDialogue& acMessage) noexcept
 {
+    CoopDiagnostics::Log(acMessage.Trace, "dialogue.received", "entity={:X} scene={:X}:{:X} phase={}", acMessage.ServerId, acMessage.SceneId.ModId, acMessage.SceneId.BaseId, acMessage.ScenePhase);
     // A member can initiate dialogue with an NPC owned by this client.
     Actor* pActor = Utils::GetByServerId<Actor>(acMessage.ServerId);
     if (!pActor)
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "dialogue.skipped", "reason=actor_missing");
         return;
+    }
 
     // Every client plays scenes itself, the local copy usually voices the line. Menu and other-scene lines still play.
     if (IsLineVoicedByLocalScene(pActor, acMessage.SceneId, acMessage.ScenePhase))
@@ -1190,57 +1205,79 @@ void CharacterService::OnNotifyDialogue(const NotifyDialogue& acMessage) noexcep
         spdlog::info(
             "Skipping remote dialogue for actor {:X}, sender's phase {}, it plays the same scene {:X} here, file: {}", pActor->formID, acMessage.ScenePhase,
             pActor->GetCurrentScene()->formID, acMessage.SoundFilename);
+        CoopDiagnostics::Log(acMessage.Trace, "dialogue.skipped", "reason=voiced_by_local_scene");
         return;
     }
 
+    CoopDiagnostics::Log(acMessage.Trace, "dialogue.apply_attempt", "local={:X}", pActor->formID);
     pActor->StopCurrentDialogue(true);
     pActor->SpeakSound(acMessage.SoundFilename.c_str());
+    CoopDiagnostics::Log(acMessage.Trace, "dialogue.apply_returned", "postcondition=unverified");
 }
 
 void CharacterService::OnSubtitleEvent(const SubtitleEvent& acEvent) noexcept
 {
+    CoopDiagnostics::Log(acEvent.Trace, "subtitle.queued", "local={:X} scene_local={:X} phase={}", acEvent.SpeakerID, acEvent.SceneID, acEvent.ScenePhase);
     if (!m_transport.IsConnected())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "subtitle.skipped", "reason=not_connected");
         return;
+    }
 
     auto view = m_world.view<FormIdComponent>(entt::exclude<ObjectComponent>);
     auto entityIt = std::find_if(view.begin(), view.end(), [view, formId = acEvent.SpeakerID](auto entity) { return view.get<FormIdComponent>(entity).Id == formId; });
 
     if (entityIt == view.end())
+    {
+        CoopDiagnostics::Log(acEvent.Trace, "subtitle.skipped", "reason=entity_missing");
         return;
+    }
 
     auto serverIdRes = Utils::GetServerId(*entityIt);
     if (!serverIdRes)
     {
         spdlog::error("{}: server id not found for form id {:X}", __FUNCTION__, acEvent.SpeakerID);
+        CoopDiagnostics::Log(acEvent.Trace, "subtitle.skipped", "reason=server_id_missing");
         return;
     }
 
     SubtitleRequest request{};
+    request.Trace = acEvent.Trace;
     request.ServerId = serverIdRes.value();
     request.Text = acEvent.Text;
     request.TopicFormId = acEvent.TopicFormID;
     if (acEvent.SceneID && m_world.GetModSystem().GetServerModId(acEvent.SceneID, request.SceneId))
         request.ScenePhase = acEvent.ScenePhase;
 
+    CoopDiagnostics::Log(request.Trace, "subtitle.send", "entity={:X} scene={:X}:{:X} phase={}", request.ServerId, request.SceneId.ModId, request.SceneId.BaseId, request.ScenePhase);
     m_transport.Send(request);
 }
 
 void CharacterService::OnNotifySubtitle(const NotifySubtitle& acMessage) noexcept
 {
+    CoopDiagnostics::Log(acMessage.Trace, "subtitle.received", "entity={:X} scene={:X}:{:X} phase={}", acMessage.ServerId, acMessage.SceneId.ModId, acMessage.SceneId.BaseId, acMessage.ScenePhase);
     Actor* pActor = Utils::GetByServerId<Actor>(acMessage.ServerId);
     if (!pActor)
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "subtitle.skipped", "reason=actor_missing");
         return;
+    }
 
     // The local copy of the scene shows its own subtitle, see OnNotifyDialogue. Only the actor's own voice line ending
     // hides a subtitle, so a remote one arriving after the local line has finished would stay on screen.
     if (IsLineVoicedByLocalScene(pActor, acMessage.SceneId, acMessage.ScenePhase))
+    {
+        CoopDiagnostics::Log(acMessage.Trace, "subtitle.skipped", "reason=voiced_by_local_scene");
         return;
+    }
 
     // This is only for fallout 4
     TESTopicInfo* pInfo = nullptr;
     pInfo = Cast<TESTopicInfo>(TESForm::GetById(acMessage.TopicFormId));
 
+    CoopDiagnostics::Log(acMessage.Trace, "subtitle.apply_attempt", "local={:X}", pActor->formID);
     SubtitleManager::Get()->ShowSubtitle(pActor, acMessage.Text.c_str(), pInfo);
+    CoopDiagnostics::Log(acMessage.Trace, "subtitle.apply_returned", "postcondition=unverified");
 }
 
 void CharacterService::OnNotifyActorTeleport(const NotifyActorTeleport& acMessage) noexcept

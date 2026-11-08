@@ -1,3 +1,4 @@
+#include <CoopDiagnosticMessages.h>
 ﻿#include <Components.h>
 #include <GameServer.h>
 #include <Packet.hpp>
@@ -663,9 +664,12 @@ void GameServer::SendToPlayers(const ServerMessage& acServerMessage, const Playe
 // NOTE: this doesn't check objects in range, only characters in range.
 bool GameServer::SendToPlayersInRange(const ServerMessage& acServerMessage, const entt::entity acOrigin, const Player* apExcludedPlayer) const
 {
+    const auto* trace = CoopDiagnostics::GetTrace(acServerMessage);
     if (!m_pWorld->valid(acOrigin))
     {
         spdlog::error("Entity is invalid: {:X}", World::ToInteger(acOrigin));
+        if (trace)
+            CoopDiagnostics::Log(*trace, "server.route_rejected", "reason=invalid_entity entity={:X}", World::ToInteger(acOrigin));
         return false;
     }
 
@@ -675,6 +679,8 @@ bool GameServer::SendToPlayersInRange(const ServerMessage& acServerMessage, cons
     if (it == view.end())
     {
         spdlog::warn("Cell component not found for entity {:X}", World::ToInteger(acOrigin));
+        if (trace)
+            CoopDiagnostics::Log(*trace, "server.route_rejected", "reason=missing_cell entity={:X}", World::ToInteger(acOrigin));
         return false;
     }
 
@@ -687,7 +693,13 @@ bool GameServer::SendToPlayersInRange(const ServerMessage& acServerMessage, cons
     for (Player* pPlayer : m_pWorld->GetPlayerManager())
     {
         if (cellComponent.IsInRange(pPlayer->GetCellComponent(), isDragon) && pPlayer != apExcludedPlayer)
+        {
+            if (trace)
+                CoopDiagnostics::Log(*trace, "server.relay_attempt", "recipient={:X} entity={:X}", pPlayer->GetId(), World::ToInteger(acOrigin));
             pPlayer->Send(acServerMessage);
+        }
+        else if (trace)
+            CoopDiagnostics::Log(*trace, "server.relay_skipped", "recipient={:X} reason={}", pPlayer->GetId(), pPlayer == apExcludedPlayer ? "sender" : "out_of_range");
     }
 
     return true;

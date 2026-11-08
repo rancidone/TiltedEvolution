@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <TiltedOnlinePCH.h>
 
 #include <Games/References.h>
@@ -1040,9 +1041,11 @@ bool TP_MAKE_THISCALL(HookActivate, TESObjectREFR, TESObjectREFR* apActivator, u
         if (apThis->baseForm->formType == FormType::Door)
             openState = apThis->GetOpenState();
 
-        World::Get().GetRunner().Trigger(
-            ActivateEvent(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, openState)
-        );
+        ActivateEvent event(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, openState);
+        event.DiagnosticObjectId = apThis->formID;
+        event.DiagnosticActivatorId = pActivator->formID;
+        CoopDiagnostics::Log(event.Trace, "activation.hook", "local={:X} activator_local={:X} base={:X} count={}", event.DiagnosticObjectId, event.DiagnosticActivatorId, apThis->baseForm->formID, aCount);
+        World::Get().GetRunner().Trigger(std::move(event));
     }
 
     return TiltedPhoques::ThisCall(RealActivate, apThis, apActivator, aUnk1, apObjectToGet, aCount, aDefaultProcessing);

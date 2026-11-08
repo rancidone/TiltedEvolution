@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Message.h"
+#include <Structs/DiagnosticTrace.h>
 
 #include <Structs/GameId.h>
 
@@ -13,10 +14,12 @@ struct ActivateRequest final : ClientMessage
     {
     }
 
+    DiagnosticTrace Trace{};
+
     void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept override;
     void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept override;
 
-    bool operator==(const ActivateRequest& acRhs) const noexcept { return Id == acRhs.Id && ActivatorId == acRhs.ActivatorId && CellId == acRhs.CellId && PreActivationOpenState == acRhs.PreActivationOpenState && GetOpcode() == acRhs.GetOpcode(); }
+    bool operator==(const ActivateRequest& acRhs) const noexcept { return Trace == acRhs.Trace && Id == acRhs.Id && ActivatorId == acRhs.ActivatorId && CellId == acRhs.CellId && PreActivationOpenState == acRhs.PreActivationOpenState && GetOpcode() == acRhs.GetOpcode(); }
 
     GameId Id;
     GameId CellId;

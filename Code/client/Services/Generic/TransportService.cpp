@@ -1,3 +1,4 @@
+#include <CoopDiagnosticMessages.h>
 
 #include <Services/TransportService.h>
 
@@ -87,6 +88,8 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         TiltedPhoques::PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), writer.Size());
 
         Client::Send(&packet, aPacketFlags);
+        if (const auto* trace = CoopDiagnostics::GetTrace(acMessage))
+            CoopDiagnostics::Log(*trace, "client.transport_submitted", "opcode={}", static_cast<unsigned>(acMessage.GetOpcode()));
 
         return true;
     }

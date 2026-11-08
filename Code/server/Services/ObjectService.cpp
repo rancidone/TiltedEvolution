@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Services/ObjectService.h>
 
 #include <GameServer.h>
@@ -119,7 +120,9 @@ void ObjectService::OnAssignObjectsRequest(const PacketEvent<AssignObjectsReques
 
 void ObjectService::OnActivate(const PacketEvent<ActivateRequest>& acMessage) const noexcept
 {
+    CoopDiagnostics::Log(acMessage.Packet.Trace, "activation.server_received", "sender={:X} object={:X}:{:X} activator={:X}", acMessage.pPlayer->GetId(), acMessage.Packet.Id.ModId, acMessage.Packet.Id.BaseId, acMessage.Packet.ActivatorId);
     NotifyActivate notifyActivate;
+    notifyActivate.Trace = acMessage.Packet.Trace;
     notifyActivate.Id = acMessage.Packet.Id;
     notifyActivate.ActivatorId = acMessage.Packet.ActivatorId;
     notifyActivate.PreActivationOpenState = acMessage.Packet.PreActivationOpenState;
@@ -128,8 +131,11 @@ void ObjectService::OnActivate(const PacketEvent<ActivateRequest>& acMessage) co
     {
         if (pPlayer != acMessage.pPlayer && pPlayer->GetCellComponent().Cell == acMessage.Packet.CellId)
         {
+            CoopDiagnostics::Log(notifyActivate.Trace, "server.relay_attempt", "recipient={:X}", pPlayer->GetId());
             pPlayer->Send(notifyActivate);
         }
+        else
+            CoopDiagnostics::Log(notifyActivate.Trace, "server.relay_skipped", "recipient={:X} reason={}", pPlayer->GetId(), pPlayer == acMessage.pPlayer ? "sender" : "different_cell");
     }
 }
 

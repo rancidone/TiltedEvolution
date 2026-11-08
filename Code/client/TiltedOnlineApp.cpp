@@ -1,5 +1,8 @@
 #include <TiltedOnlinePCH.h>
 
+#include <CoopDiagnostics.h>
+#include <BuildInfo.h>
+
 #include <TiltedOnlineApp.h>
 
 #include <DInputHook.hpp>
@@ -74,6 +77,9 @@ TiltedOnlineApp::TiltedOnlineApp()
     logger->set_pattern("%^[%Y-%m-%d %H:%M:%S.%e] [%l] [tid %t] %$ %v");
     spdlog::flush_every(std::chrono::seconds(1));
     set_default_logger(logger);
+    CoopDiagnostics::Log({}, "startup", "role=client build={}", BUILD_COMMIT);
+    if (!CoopDiagnostics::GetConfiguration().Enabled && std::getenv("STR_DIAGNOSTICS"))
+        spdlog::warn("CoopDiag disabled: launcher must supply valid process and session IDs and STR_DIAGNOSTICS=1");
 }
 
 TiltedOnlineApp::~TiltedOnlineApp() = default;

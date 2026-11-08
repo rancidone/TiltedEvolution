@@ -1,3 +1,4 @@
+#include <CoopDiagnostics.h>
 #include <Games/References.h>
 #include <Games/Skyrim/EquipManager.h>
 #include <AI/AIProcess.h>
@@ -65,10 +66,14 @@ void QueueActorInventoryChange(Actor* apActor, InventoryChangeEvent aEvent, TESO
         ownershipToken = Utils::GetRemoteOwnershipToken(apActor->formID);
 
     if (!ownershipToken)
+    {
+        CoopDiagnostics::Log(aEvent.Trace, "inventory.hook_skipped", "reason=ownership_token_missing local={:X}", aEvent.FormId);
         return;
+    }
 
     aEvent.ServerId = ownershipToken->ServerId;
     aEvent.OwnershipEpoch = ownershipToken->OwnershipEpoch;
+    CoopDiagnostics::Log(aEvent.Trace, "inventory.hook_queued", "local={:X} entity={:X} epoch={} item={:X}:{:X} count={} drop={} update={}", aEvent.FormId, aEvent.ServerId, aEvent.OwnershipEpoch, aEvent.Item.BaseId.ModId, aEvent.Item.BaseId.BaseId, aEvent.Item.Count, aEvent.Drop, aEvent.UpdateClients);
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 }
@@ -1096,7 +1101,9 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
         bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
 
-        QueueActorInventoryChange(apThis, InventoryChangeEvent(apThis->formID, std::move(item), false, shouldUpdateClients));
+        InventoryChangeEvent event(apThis->formID, std::move(item), false, shouldUpdateClients);
+        CoopDiagnostics::Log(event.Trace, "inventory.pickup_hook", "local={:X} object_local={:X} requested={} metadata_count={} temporary={} update={}", apThis->formID, apObject->formID, aCount, event.Item.Count, apObject->IsTemporary(), shouldUpdateClients);
+        QueueActorInventoryChange(apThis, std::move(event));
     }
 
     return TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aUnk2);
@@ -1118,7 +1125,9 @@ void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* ap
     if (apExtraData)
         apThis->GetItemFromExtraData(item, apExtraData);
 
-    QueueActorInventoryChange(apThis, InventoryChangeEvent(apThis->formID, std::move(item), true));
+    InventoryChangeEvent event(apThis->formID, std::move(item), true);
+    CoopDiagnostics::Log(event.Trace, "inventory.drop_hook", "local={:X} requested={} metadata_count={}", apThis->formID, aCount, event.Item.Count);
+    QueueActorInventoryChange(apThis, std::move(event));
 
     ScopedInventoryOverride _;
 
