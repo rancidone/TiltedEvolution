@@ -1,6 +1,8 @@
 
 #include <TiltedCore/Filesystem.hpp>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -68,6 +70,11 @@ struct LogInstance
         globalOut->set_pattern("%^[%Y-%m-%d %H:%M:%S.%e] [%l] [tid %t] %$ %v");
 
         globalOut->set_level(level::from_str(sLogLevel.value()));
+        // The logger is constructed before DediRunner loads settings. Use the same
+        // launch-local flag as the client without bypassing the server's INI configuration.
+        const char* const pDiagnosticFlag = std::getenv("STR_DIAGNOSTICS");
+        if (pDiagnosticFlag && std::strcmp(pDiagnosticFlag, "1") == 0)
+            globalOut->set_level(level::debug);
         spdlog::flush_every(std::chrono::seconds(2));
 
         // as the library is compiled into the client + server we have to do this twice
