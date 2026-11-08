@@ -1045,11 +1045,12 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, TESObjectREFR, TESBoundObject* apIte
 
         Inventory::Entry item{};
         modSystem.GetServerModId(apItem->formID, item.BaseId);
-        item.Count = aCount;
 
         if (apExtraData)
             apThis->GetItemFromExtraData(item, apExtraData);
 
+        // ExtraCount describes the source stack, not the transferred quantity.
+        item.Count = aCount;
         QueueReferenceInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item)), apOldOwner);
     }
 

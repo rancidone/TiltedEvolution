@@ -1061,11 +1061,12 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
 
         Inventory::Entry item{};
         modSystem.GetServerModId(apItem->formID, item.BaseId);
-        item.Count = aCount;
 
         if (apExtraData)
             apThis->GetItemFromExtraData(item, apExtraData);
 
+        // ExtraCount describes the source stack, not this inventory change.
+        item.Count = aCount;
         QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item)), apOldOwner);
     }
 
@@ -1080,11 +1081,12 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
 
         Inventory::Entry item{};
         modSystem.GetServerModId(apObject->baseForm->formID, item.BaseId);
-        item.Count = aCount;
 
         if (apObject->GetExtraDataList())
             apThis->GetItemFromExtraData(item, apObject->GetExtraDataList());
 
+        // A partial pickup must not inherit the entire reference's ExtraCount.
+        item.Count = aCount;
         // This is here so that objects that are picked up on both clients, aka non temps, are synced through activation sync.
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
         bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
@@ -1106,11 +1108,12 @@ void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* ap
 
     Inventory::Entry item{};
     modSystem.GetServerModId(apObject->formID, item.BaseId);
-    item.Count = -aCount;
 
     if (apExtraData)
         apThis->GetItemFromExtraData(item, apExtraData);
 
+    // Read metadata first: ExtraCount must not turn a removal into an addition.
+    item.Count = -aCount;
     QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item), true));
 
     ScopedInventoryOverride _;
