@@ -204,6 +204,7 @@ void TransportService::HandleConnected(const ConnectedEvent& acEvent) noexcept
 void TransportService::HandleDisconnected(const DisconnectedEvent& acEvent) noexcept
 {
     CoopDiagnostics::Log({}, "connection.disconnected", "player={:X}", m_localPlayerId);
+    CoopDiagnostics::ResetSession();
     m_localPlayerId = NULL;
 }
 
@@ -212,6 +213,8 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     using AR = AuthenticationResponse::ResponseType;
     if (acMessage.Type == AR::kAccepted)
     {
+        const bool bound = CoopDiagnostics::BindSession(acMessage.DiagnosticSession);
+        CoopDiagnostics::Log({}, "session.bound", "role=client build={} server_session_available={} player={:X}", BUILD_COMMIT, bound, acMessage.PlayerId);
         m_connected = true;
 
         m_world.SetServerSettings(acMessage.Settings);

@@ -9,6 +9,10 @@ void AuthenticationResponse::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter
     UserMods.Serialize(aWriter);
     Settings.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, PlayerId);
+    // Rejected logins retain their old payload so mismatched builds can still report
+    // kWrongVersion. Accepted peers have already passed the exact build check.
+    if (Type == ResponseType::kAccepted)
+        DiagnosticSession.Serialize(aWriter);
 }
 
 void AuthenticationResponse::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -20,4 +24,7 @@ void AuthenticationResponse::DeserializeRaw(TiltedPhoques::Buffer::Reader& aRead
     UserMods.Deserialize(aReader);
     Settings.Deserialize(aReader);
     PlayerId = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;
+    DiagnosticSession = {};
+    if (Type == ResponseType::kAccepted)
+        DiagnosticSession.Deserialize(aReader);
 }

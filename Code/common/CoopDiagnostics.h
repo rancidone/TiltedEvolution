@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Structs/DiagnosticTrace.h>
+#include <Structs/DiagnosticSessionId.h>
 #include <spdlog/spdlog.h>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <utility>
+#include <mutex>
 
 namespace CoopDiagnostics
 {
@@ -14,7 +16,7 @@ struct Configuration
 {
     bool Enabled{};
     DiagnosticTrace Process{};
-    char Session[33]{};
+    DiagnosticSessionId InitialSession{};
     std::chrono::steady_clock::time_point Started = std::chrono::steady_clock::now();
 };
 
@@ -48,12 +50,48 @@ inline const Configuration& GetConfiguration() noexcept
             && ParseId(std::getenv("STR_DIAGNOSTICS_PROCESS"), result.Process.ProcessHigh, result.Process.ProcessLow)
             && ParseId(session, sessionHigh, sessionLow))
         {
-            std::memcpy(result.Session, session, 32);
+            result.InitialSession = {sessionHigh, sessionLow};
             result.Enabled = true;
         }
         return result;
     }();
     return config;
+}
+
+struct SessionState
+{
+    std::mutex Mutex;
+    DiagnosticSessionId Id = GetConfiguration().InitialSession;
+};
+
+inline SessionState& GetSessionState() noexcept
+{
+    static SessionState state;
+    return state;
+}
+
+inline DiagnosticSessionId GetSession() noexcept
+{
+    auto& state = GetSessionState();
+    std::lock_guard<std::mutex> guard(state.Mutex);
+    return state.Id;
+}
+
+inline bool BindSession(const DiagnosticSessionId& acSession) noexcept
+{
+    if (!GetConfiguration().Enabled || (acSession.High == 0 && acSession.Low == 0))
+        return false;
+    auto& state = GetSessionState();
+    std::lock_guard<std::mutex> guard(state.Mutex);
+    state.Id = acSession;
+    return true;
+}
+
+inline void ResetSession() noexcept
+{
+    auto& state = GetSessionState();
+    std::lock_guard<std::mutex> guard(state.Mutex);
+    state.Id = GetConfiguration().InitialSession;
 }
 
 inline DiagnosticTrace NextTrace() noexcept
@@ -74,10 +112,13 @@ void Log(const DiagnosticTrace& acTrace, const char* apStage, fmt::format_string
         return;
     // Record order is local. UTC is context only; cross-host causality comes from the propagated trace.
     const auto record = NextTrace();
+    // Copy under the lock; never hold it while formatting or invoking the logger.
+    // Native hook threads may log concurrently with main-thread authentication.
+    const auto session = GetSession();
     const auto utc = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - config.Started).count();
-    spdlog::info("CoopDiag v=1 session={} process={:016x}{:016x} record={} utc_us={} elapsed_us={} trace={:016x}{:016x}:{} stage={} {}",
-        config.Session, config.Process.ProcessHigh, config.Process.ProcessLow, record.Sequence, utc, elapsed,
+    spdlog::info("CoopDiag v=1 session={:016x}{:016x} process={:016x}{:016x} record={} utc_us={} elapsed_us={} trace={:016x}{:016x}:{} stage={} {}",
+        session.High, session.Low, config.Process.ProcessHigh, config.Process.ProcessLow, record.Sequence, utc, elapsed,
         acTrace.ProcessHigh, acTrace.ProcessLow, acTrace.Sequence, apStage, fmt::format(aFormat, std::forward<Args>(aArgs)...));
 }
 }

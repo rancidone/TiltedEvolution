@@ -10,6 +10,7 @@
 #include <Messages/ServerMessageFactory.h>
 #include <Structs/DiagnosticTrace.h>
 #include <limits>
+#include <cstring>
 
 namespace
 {
@@ -85,5 +86,41 @@ TEST_CASE("Diagnostic correlation survives real message factories", "[encoding.d
         CheckRoundTrip<NotifySubtitle, ServerMessageFactory>(trace);
         CheckRoundTrip<DialogueRequest, ClientMessageFactory>(trace);
         CheckRoundTrip<NotifyDialogue, ServerMessageFactory>(trace);
+    }
+}
+
+TEST_CASE("Authentication distributes the diagnostic session only after acceptance", "[encoding.diagnostics]")
+{
+    for (const auto type : {AuthenticationResponse::ResponseType::kAccepted, AuthenticationResponse::ResponseType::kWrongVersion})
+    {
+        AuthenticationResponse message{};
+        message.Type = type;
+        message.Version = "diagnostic-build";
+        message.PlayerId = 123;
+        message.DiagnosticSession = {0xFEDCBA9876543210ULL, 0x8123456789ABCDEFULL};
+        TiltedPhoques::Buffer buffer(4096);
+        TiltedPhoques::Buffer::Writer writer(&buffer);
+        message.Serialize(writer);
+        TiltedPhoques::Buffer::Reader reader(&buffer);
+        auto decoded = ServerMessageFactory{}.Extract(reader);
+        REQUIRE(decoded);
+        REQUIRE(decoded->GetOpcode() == AuthenticationResponse::Opcode);
+        const auto& received = static_cast<const AuthenticationResponse&>(*decoded);
+        REQUIRE(received.Type == type);
+        REQUIRE(received.Version == message.Version);
+        REQUIRE(received.PlayerId == message.PlayerId);
+        const DiagnosticSessionId expected = type == AuthenticationResponse::ResponseType::kAccepted ? message.DiagnosticSession : DiagnosticSessionId{};
+        REQUIRE(received.DiagnosticSession == expected);
+
+        if (type == AuthenticationResponse::ResponseType::kWrongVersion)
+        {
+            // The diagnostic ID must not change a rejection packet, including its size.
+            message.DiagnosticSession = {};
+            TiltedPhoques::Buffer second(4096);
+            TiltedPhoques::Buffer::Writer secondWriter(&second);
+            message.Serialize(secondWriter);
+            REQUIRE(writer.Size() == secondWriter.Size());
+            REQUIRE(std::memcmp(buffer.GetWriteData(), second.GetWriteData(), writer.Size()) == 0);
+        }
     }
 }

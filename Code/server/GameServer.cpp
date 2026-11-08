@@ -932,6 +932,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         }
 
         serverResponse.PlayerId = pPlayer->GetId();
+        serverResponse.DiagnosticSession = CoopDiagnostics::GetSession();
         CoopDiagnostics::Log({}, "connection.accepted", "player={:X}", pPlayer->GetId());
 
         auto modList = PrettyPrintModList(acRequest->UserMods.ModList);
