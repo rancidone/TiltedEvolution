@@ -1099,10 +1099,11 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
 
         // This is here so that objects that are picked up on both clients, aka non temps, are synced through activation sync.
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
-        bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
+        const bool isTemporary = apObject->IsTemporary();
+        bool shouldUpdateClients = isTemporary && !ScopedActivateOverride::IsOverriden();
 
         InventoryChangeEvent event(apThis->formID, std::move(item), false, shouldUpdateClients);
-        CoopDiagnostics::Log(event.Trace, "inventory.pickup_hook", "local={:X} object_local={:X} requested={} metadata_count={} temporary={} update={}", apThis->formID, apObject->formID, aCount, event.Item.Count, apObject->IsTemporary(), shouldUpdateClients);
+        CoopDiagnostics::Log(event.Trace, "inventory.pickup_hook", "local={:X} object_local={:X} requested={} metadata_count={} temporary={} update={}", apThis->formID, apObject->formID, aCount, event.Item.Count, isTemporary, shouldUpdateClients);
         QueueActorInventoryChange(apThis, std::move(event));
     }
 

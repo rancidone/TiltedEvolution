@@ -198,10 +198,12 @@ void TransportService::HandleUpdate(const UpdateEvent& acEvent) noexcept
 void TransportService::HandleConnected(const ConnectedEvent& acEvent) noexcept
 {
     m_localPlayerId = acEvent.PlayerId;
+    CoopDiagnostics::Log({}, "connection.accepted", "player={:X}", acEvent.PlayerId);
 }
 
 void TransportService::HandleDisconnected(const DisconnectedEvent& acEvent) noexcept
 {
+    CoopDiagnostics::Log({}, "connection.disconnected", "player={:X}", m_localPlayerId);
     m_localPlayerId = NULL;
 }
 
