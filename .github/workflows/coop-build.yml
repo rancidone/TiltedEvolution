@@ -5,6 +5,7 @@ on:
     branches:
       - coop/build-baseline
       - coop/diagnostics
+      - coop/item-drops
   workflow_dispatch:
 
 permissions:
