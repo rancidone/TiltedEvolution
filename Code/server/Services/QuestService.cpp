@@ -26,6 +26,9 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
 
     auto* pPlayer = acMessage.pPlayer;
 
+    spdlog::debug("QuestSync receive player={} quest={:X} stage={} status={} type={}",
+                  pPlayer->GetId(), message.Id.LogFormat(), message.Stage, message.Status, message.ClientQuestType);
+
     auto& questComponent = pPlayer->GetQuestLogComponent();
     auto& entries = questComponent.QuestContent.Entries;
 
@@ -40,7 +43,11 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
     if (notify.ClientQuestType == 0 ||  notify.ClientQuestType == 6) // Types None or Miscellaneous. Hard-coded to avoid client header file.
     {
         if (!bEnableMiscQuestSync)
+        {
+            spdlog::debug("QuestSync drop player={} quest={:X} stage={} status={} reason=misc_disabled",
+                          pPlayer->GetId(), message.Id.LogFormat(), message.Stage, message.Status);
             return;
+        }
         spdlog::debug("{}: syncing type none/misc quest to party, gameId {:X} questStage {} questStatus {} questType {}",
                      __FUNCTION__, notify.Id.LogFormat(), notify.Stage, notify.Status, notify.ClientQuestType);
     }
@@ -93,13 +100,19 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
     const auto& partyComponent = acMessage.pPlayer->GetParty();
     PartyService::Party* pParty = m_world.GetPartyService().GetPlayerParty(pPlayer);
     if (!pParty)
+    {
+        spdlog::debug("QuestSync drop player={} quest={:X} stage={} status={} reason=no_party",
+                      pPlayer->GetId(), message.Id.LogFormat(), message.Stage, message.Status);
         return;
+    }
 
     // Party members' scripts often reach the same stage on their own, only relay it once
     if (message.Status == RequestQuestUpdate::StageUpdate)
     {
         if (!pParty->QuestStages[message.Id].insert(message.Stage).second)
         {
+            spdlog::debug("QuestSync drop player={} quest={:X} stage={} status={} reason=duplicate_stage",
+                          pPlayer->GetId(), message.Id.LogFormat(), message.Stage, message.Status);
             spdlog::debug("Dropped duplicate quest stage from player {}, quest: {:X}, stage: {}", pPlayer->GetId(), message.Id.LogFormat(), message.Stage);
             return;
         }
@@ -110,5 +123,7 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
         pParty->QuestStages.erase(message.Id);
     }
 
+    spdlog::debug("QuestSync relay player={} quest={:X} stage={} status={}",
+                  pPlayer->GetId(), notify.Id.LogFormat(), notify.Stage, notify.Status);
     GameServer::Get()->SendToParty(notify, partyComponent, acMessage.GetSender());
 }

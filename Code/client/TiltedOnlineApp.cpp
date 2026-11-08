@@ -74,6 +74,15 @@ TiltedOnlineApp::TiltedOnlineApp()
     logger->set_pattern("%^[%Y-%m-%d %H:%M:%S.%e] [%l] [tid %t] %$ %v");
     spdlog::flush_every(std::chrono::seconds(1));
     set_default_logger(logger);
+
+    // Opt in per launch, without changing the player's installed configuration.
+    // These are observations of existing hooks, not synchronized clocks or transaction IDs.
+    char diagnosticFlag[2]{};
+    if (GetEnvironmentVariableA("STR_DIAGNOSTICS", diagnosticFlag, sizeof(diagnosticFlag)) == 1 && diagnosticFlag[0] == '1')
+    {
+        logger->set_level(spdlog::level::debug);
+        spdlog::info("Co-op diagnostics enabled; timestamps are local and debug logging may affect timing");
+    }
 }
 
 TiltedOnlineApp::~TiltedOnlineApp() = default;

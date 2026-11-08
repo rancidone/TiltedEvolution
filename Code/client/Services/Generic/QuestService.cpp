@@ -159,6 +159,8 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
                     update.Status = stopped ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started;
                     update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type); 
 
+                    spdlog::debug("QuestSync send quest={:X} stage={} status={} type={}",
+                                  update.Id.LogFormat(), update.Stage, update.Status, update.ClientQuestType);
                     m_world.GetTransport().Send(update);
                 }
             });
@@ -215,6 +217,8 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
                     update.Status = RequestQuestUpdate::StageUpdate;
                     update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type);
 
+                    spdlog::debug("QuestSync send quest={:X} stage={} status={} type={}",
+                                  update.Id.LogFormat(), update.Stage, update.Status, update.ClientQuestType);
                     m_world.GetTransport().Send(update);
                 }
             });
@@ -508,6 +512,8 @@ HeldStages* QuestService::GetHeldStages(uint32_t aQuestFormId, TESQuest* apQuest
 
 void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
 {
+    spdlog::debug("QuestSync receive quest={:X} stage={} status={} type={}",
+                  aUpdate.Id.LogFormat(), aUpdate.Stage, aUpdate.Status, aUpdate.ClientQuestType);
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
     TESQuest* pQuest = Cast<TESQuest>(TESForm::GetById(formId));

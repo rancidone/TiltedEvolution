@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - coop/build-baseline
+      - coop/diagnostics
   workflow_dispatch:
 
 permissions:
