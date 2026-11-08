@@ -4,6 +4,8 @@
 #include <TiltedCore/Serialization.hpp>
 
 #include <optional>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <catch2/catch.hpp>
 
 #include <Messages/ClientMessageFactory.h>

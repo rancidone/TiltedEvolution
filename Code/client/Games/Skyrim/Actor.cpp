@@ -1086,6 +1086,8 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
             apThis->GetItemFromExtraData(item, apObject->GetExtraDataList());
 
         // A partial pickup must not inherit the entire reference's ExtraCount.
+        spdlog::debug("InventoryHook pickup actor={:X} reference={:X} item={:X} requested={} metadata_count={}",
+            apThis->formID, apObject->formID, apObject->baseForm->formID, aCount, item.Count);
         item.Count = aCount;
         // This is here so that objects that are picked up on both clients, aka non temps, are synced through activation sync.
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
@@ -1113,6 +1115,8 @@ void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* ap
         apThis->GetItemFromExtraData(item, apExtraData);
 
     // Read metadata first: ExtraCount must not turn a removal into an addition.
+    spdlog::debug("InventoryHook drop actor={:X} item={:X} requested={} metadata_count={}",
+        apThis->formID, apObject->formID, aCount, item.Count);
     item.Count = -aCount;
     QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item), true));
 
